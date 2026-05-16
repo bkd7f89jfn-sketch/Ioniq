@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="format-detection" content="telephone=no"/>
+<title>Ioniq 5 – Route Planner</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#0f1117;--panel:#151a24;--card:#1b2130;--border:#273050;--accent:#00d4ff;--text:#e8edf5;--muted:#8a94a8;--ok:#27c46b;--warn:#ffb020;--bad:#ff5d5d}
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column}
+.hdr{height:54px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#1a2030,#131925);border-bottom:1px solid var(--border);flex-shrink:0}
+.hdr h1{font-size:16px;font-weight:700;color:var(--accent)}
+.hdr .v{font-size:12px;color:#00d4ff88;border:1px solid #00d4ff28;padding:3px 10px;border-radius:999px;font-weight:600}
+.app{display:flex;flex:1;height:calc(100vh - 54px);overflow:hidden}
+.pnl{width:380px;min-width:380px;background:var(--panel);border-right:1px solid var(--border);overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;-webkit-overflow-scrolling:touch}
+.mapw{flex:1;position:relative;height:100%}
+#map{width:100%;height:100%;z-index:1}
+@media(max-width:900px){.app{flex-direction:column}.pnl{width:100%;min-width:0;height:45vh;border-right:none;border-bottom:1px solid var(--border);flex:none}.mapw{height:55vh;flex:none}}
+.sec{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}
+.sec h3{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:#5ec8e0;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 6px;font-weight:500}
+label:first-of-type{margin-top:0}
+input[type=text],input[type=number],select{width:100%;background:#0d1220;border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-size:15px;outline:none;transition:border .2s;-webkit-appearance:none;appearance:none}
+input[type=text]:focus,input[type=number]:focus,select:focus{border-color:#00d4ff88}
+input[type=range]{width:100%;accent-color:var(--accent);height:24px;margin:8px 0}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.socbar{height:8px;background:#0a0e1a;border-radius:8px;overflow:hidden;margin-top:6px}
+.socfill{height:100%;border-radius:8px;transition:width .3s ease-out,background .3s ease-out}
+.chgtab{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
+.chgtab th{color:#5ec8e0;font-weight:600;padding:6px;text-align:left;border-bottom:1px solid var(--border)}
+.chgtab td{padding:6px;border-bottom:1px solid #1a2030;color:var(--muted)}
+.chgtab td:last-child{text-align:right;font-weight:700}
+.chgtab tr.slow td{color:#ffb020}.chgtab tr.bad td{color:#ff5d5d}.chgtab tr.ok td{color:#6de09a}
+.warn-box{display:none;background:#3a2800;border:1px solid #6a4800;color:#ffcc66;padding:10px 12px;border-radius:10px;font-size:13px;margin-top:8px;line-height:1.4}
+.warn-box.show{display:block}
+.netrow{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#0d1220;border:1px solid var(--border);border-radius:10px;margin-bottom:6px}
+.netrow .nm{flex:1;font-size:14px;font-weight:500}
+.netrow input[type=number]{width:80px;padding:8px;font-size:14px;text-align:center}
+.netrow .eu{font-size:12px;color:#556}
+.netrow.preferred{border-color:#00d4ff66;background:#0d1a2a;box-shadow:inset 0 0 10px #00d4ff11}
+.net-pref-badge{font-size:11px;color:var(--accent);background:#00d4ff18;border:1px solid #00d4ff33;border-radius:999px;padding:2px 8px;margin-left:6px;font-weight:600}
+.dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.wprow,.cw-item{display:flex;gap:8px;margin-top:8px}
+.wprow input,.cw-item input{flex:1}
+.btn{width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#0bb6da,#1050c8);color:#fff;font-weight:700;font-size:16px;cursor:pointer;transition:transform .1s,opacity .2s;box-shadow:0 4px 12px #00d4ff33}
+.btn:active{transform:scale(0.98)}.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.ghost{padding:12px;background:#0d1220;border:1px solid var(--border);border-radius:10px;color:var(--text);cursor:pointer;font-size:14px;font-weight:500;width:100%;text-align:center;transition:background .2s}
+.ghost:hover{background:#151d30;border-color:#00d4ff44}
+.danger{color:#ff8888;border-color:#5a2828;width:auto;padding:0 16px;font-size:18px}
+.quickrow{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.quickbtn{flex:1;min-width:90px;padding:10px 8px;background:#0d1a2e;border:1px solid #00d4ff44;border-radius:10px;color:#00d4ff;cursor:pointer;font-size:13px;font-weight:600;transition:all .2s}
+.quickbtn:hover{background:#00d4ff22;border-color:#00d4ff88}
+.upload{border:2px dashed var(--border);padding:16px;border-radius:12px;text-align:center;cursor:pointer;background:#0d1220;transition:border-color .2s}
+.upload:hover{border-color:var(--accent)}.upload input{display:none}
+.segtog,.strat{display:flex;border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+.segtog button,.strat button{flex:1;padding:12px;background:#0d1220;border:none;color:#8a94a8;font-size:13px;font-weight:600;cursor:pointer;line-height:1.4;transition:all .2s;border-right:1px solid var(--border)}
+.segtog button:last-child,.strat button:last-child{border-right:none}
+.segtog button.on,.strat button.on{background:#00d4ff1a;color:var(--accent)}
+.err{display:none;background:#3a1212;border:1px solid #6a2828;color:#ffaaaa;padding:12px;border-radius:10px;font-size:14px;font-weight:500}
+.err.show{display:block}
+.ldr{display:none;font-size:13px;font-weight:600;color:var(--accent);padding:8px 0;text-align:center}.ldr.show{display:block}
+.small{font-size:12px;color:var(--muted);line-height:1.5}
+.sidecards{position:absolute;right:12px;top:12px;max-width:340px;width:100%;z-index:1000;max-height:calc(100% - 150px);overflow-y:auto;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch;padding-right:4px}
+@media(max-width:900px){.sidecards{position:static;max-width:none;max-height:none;padding:14px;background:var(--panel)}}
+.card{background:rgba(22,30,46,.95);border:1px solid #374151;border-radius:14px;padding:14px;backdrop-filter:blur(10px);box-shadow:0 8px 24px rgba(0,0,0,0.4)}
+.card h4{font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;line-height:1.3}
+.chblock{margin-top:10px;padding:12px;background:#0a0e1c;border:1px solid #2d3748;border-radius:12px;transition:transform .2s}
+.chblock.pref{border-color:#00d4ff88;background:#0d1f3a;box-shadow:inset 0 0 12px #00d4ff22}
+.chblock .chn{font-size:15px;font-weight:700;color:#e2e8f0;display:flex;align-items:center}
+.chblock .cha{font-size:13px;color:#94a3b8;margin-top:4px}
+.chblock .chf{display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:8px}
+.chkw{font-size:14px;color:var(--accent);font-weight:700;background:#00d4ff11;padding:4px 8px;border-radius:6px;border:1px solid #00d4ff22}
+.chest{font-size:11px;color:#ffb020;font-weight:600;margin-left:6px}
+.gm-btn{display:inline-flex;align-items:center;gap:6px;background:#1a73e8;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;box-shadow:0 2px 6px #1a73e844;transition:background .2s}
+.gm-btn:hover,.gm-btn:active{background:#155dba;color:#fff;text-decoration:none}
+.gm-btn svg{width:16px;height:16px;fill:currentColor}
+.tag{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid #ffffff22;font-weight:600}
+.tagok{color:#6de09a;background:#6de09a11}.tagwarn{color:#ffd07a;background:#ffd07a11}.tagbad{color:#ff8888;background:#ff888811}
+.statsbar{position:absolute;left:0;right:0;bottom:0;padding:12px 16px;z-index:999;background:linear-gradient(0deg,rgba(10,13,20,.98) 70%,transparent);backdrop-filter:blur(4px)}
+@media(max-width:900px){.statsbar{position:static;background:var(--panel);padding:14px;border-top:1px solid var(--border)}}
+.statsrow{display:flex;flex-wrap:wrap;gap:10px}
+.sbox{background:rgba(24,32,52,.9);border:1px solid #374151;border-radius:12px;padding:10px 14px;min-width:96px;flex:1}
+.sbox .v{font-size:20px;font-weight:800;color:var(--accent);line-height:1.2}.sbox .l{font-size:11px;color:#94a3b8;margin-top:2px;text-transform:uppercase;letter-spacing:0.5px}
+.mixbar{display:flex;height:16px;border-radius:8px;overflow:hidden;margin-top:10px}
+.mixseg{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#374151;border-radius:5px}
+.chpin{background:#0d1a2e;color:#00d4ff;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;border:2px solid #00d4ff;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.6)}
+.chpin.pref{background:#ff8800;color:#fff;border-color:#fff}
+.swapBtn{background:#0d1220;border:1px solid var(--border);color:var(--accent);padding:8px 12px;border-radius:8px;font-size:18px;cursor:pointer;width:auto}
+.swapBtn:hover{background:#151d30;border-color:#00d4ff66}
+.locrow{display:flex;gap:6px;align-items:center;margin-top:6px}
+.locrow input{flex:1}
+.iconbtn{background:#0d1220;border:1px solid var(--border);color:var(--accent);padding:10px 12px;border-radius:8px;cursor:pointer;font-size:16px;flex-shrink:0}
+.iconbtn:hover{background:#151d30;border-color:#00d4ff66}
+</style>
+</head>
+<body>
+<div class="hdr"><h1>⚡ Ioniq 5 AWD 84 kWh · Route Planner</h1><span class="v">v6.0</span></div>
+<div class="app">
+<div class="pnl">
+
+  <div class="sec">
+    <h3>🗺 Trasa</h3>
+    <label>Štart</label>
+    <div class="locrow">
+      <input id="origin" type="text" value="Praha"/>
+      <button class="iconbtn" onclick="useGps('origin')" title="Aktuálna poloha">📍</button>
+    </div>
+    <div id="wps"></div>
+    <div class="quickrow" style="margin-top:10px">
+      <button class="quickbtn" onclick="addWp('route')">＋ zastávka</button>
+      <button class="quickbtn" onclick="swapEnds()">⇅ otočiť</button>
+    </div>
+    <label>Cieľ</label>
+    <div class="locrow">
+      <input id="dest" type="text" value="Bratislava"/>
+      <button class="iconbtn" onclick="useGps('dest')" title="Aktuálna poloha">📍</button>
+    </div>
+    <div class="quickrow">
+      <button class="quickbtn" onclick="setHome('dest')">🏠 Domov</button>
+      <button class="quickbtn" onclick="setHome('origin')">🏠 zo Domu</button>
+      <button class="quickbtn" onclick="editHome()" title="Upraviť domov">✎</button>
+    </div>
+    <div id="homeLbl" class="small" style="margin-top:6px"></div>
+  </div>
+
+  <div class="sec">
+    <h3>⚡ Vlastné nabíjacie zastávky</h3>
+    <div class="small" style="margin-bottom:10px">Ak si sem pridáš mesto/adresu, aplikácia tu prioritne naplánuje nabíjanie.</div>
+    <div id="cwps"></div>
+    <button class="ghost" onclick="addWp('charge')" style="margin-top:8px">＋ Pridať nabíjaciu zastávku</button>
+  </div>
+
+  <div class="sec">
+    <h3>🔋 Batéria & nabíjacia krivka</h3>
+    <label>SoC pri štarte: <strong id="socLbl" style="color:var(--accent)">80%</strong></label>
+    <input id="socStart" type="range" min="5" max="100" value="80" oninput="paintSoc()"/>
+    <div class="socbar"><div id="socFill" class="socfill" style="width:80%"></div></div>
+    <div class="g3" style="margin-top:12px">
+      <div><label>Min. cieľ %</label><input id="socDest" type="number" value="10" min="0" max="40"/></div>
+      <div><label>Min. nabíj. %</label><input id="socMin" type="number" value="8" min="0" max="25"/></div>
+      <div><label>Max. nabíj. %</label><input id="socTgt" type="number" value="80" min="30" max="100" oninput="checkSocWarn()"/></div>
+    </div>
+    <div id="socWarn" class="warn-box">⚠ Nabíjanie nad 80% je výrazne pomalé.</div>
+    <table class="chgtab">
+      <tr><th>Úsek</th><th>Výkon</th><th>Čas</th></tr>
+      <tr class="ok"><td>10% → 80%</td><td>235–100 kW</td><td>~16 min</td></tr>
+      <tr class="slow"><td>80% → 90%</td><td>100–52 kW</td><td>~6 min</td></tr>
+      <tr class="bad"><td>90% → 100%</td><td>52–15 kW</td><td>~18 min</td></tr>
+    </table>
+  </div>
+
+  <div class="sec">
+    <h3>⏱ Stratégia nabíjania</h3>
+    <div class="strat">
+      <button class="on" id="sb_mt" onclick="setStrat('mintime')">⚡ Najkratší<br>celkový čas</button>
+      <button id="sb_std" onclick="setStrat('standard')">🔋 Nabiť do<br>nastaveného max</button>
+    </div>
+    <div id="stratInfo" class="small" style="margin-top:10px;background:#0a0e1a;padding:10px;border-radius:8px"></div>
+  </div>
+
+  <div class="sec">
+    <h3>⭐ Preferovaná sieť</h3>
+    <select id="prefNet" onchange="setPrefNet(this.value)">
+      <option value="">— Žiadna preferencia —</option>
+      <option value="Ionity">Ionity (350 kW)</option>
+      <option value="ČEZ">ČEZ</option>
+      <option value="ZSE">ZSE Drive</option>
+      <option value="GreenWay">GreenWay</option>
+      <option value="Tesla">Tesla Supercharger</option>
+      <option value="MOL">MOL</option>
+      <option value="Lidl">Lidl Charge</option>
+      <option value="Shell">Shell Recharge</option>
+      <option value="E.ON">E.ON</option>
+      <option value="futurego">futurego</option>
+    </select>
+    <div id="prefInfo" class="small" style="margin-top:8px"></div>
+  </div>
+
+  <div class="sec">
+    <h3>🏎 Rýchlosti (km/h)</h3>
+    <div class="g3">
+      <div><label>Diaľnica</label><input id="spdHw" type="number" value="135"/></div>
+      <div><label>Cesta</label><input id="spdRd" type="number" value="100"/></div>
+      <div><label>Obec</label><input id="spdCt" type="number" value="55"/></div>
+    </div>
+    <div id="mixDisp" style="display:none">
+      <div class="mixbar" id="mixBar"></div>
+      <div class="small" id="mixTxt" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h3>🌡 Sezóna</h3>
+    <div class="segtog">
+      <button class="on" id="sbS" onclick="setSeason('s')">☀️ Leto</button>
+      <button id="sbW" onclick="setSeason('w')">❄️ Zima +15%</button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h3>📊 Mesačný profil</h3>
+    <div class="upload" onclick="document.getElementById('xlsx').click()">
+      <div style="font-size:26px;margin-bottom:4px">📂</div>
+      <div class="small" id="xlsxLbl">Nahrať XLSX s jazdami</div>
+      <input id="xlsx" type="file" accept=".xlsx,.xls" onchange="loadXlsx(this)"/>
+    </div>
+    <div class="g2" style="margin-top:12px">
+      <div><label>Celk. km</label><input id="mKm" type="number" value="1791.1" step="0.1"/></div>
+      <div><label>Celk. kWh</label><input id="mKwh" type="number" value="302.36" step="0.01"/></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h3>💶 Ceny nabíjania (€/kWh)</h3>
+    <div id="nets"></div>
+  </div>
+
+  <div id="err" class="err"></div>
+  <div id="ldr" class="ldr">Načítavam…</div>
+  <button id="runBtn" class="btn" onclick="run()" style="margin-bottom:20px">⚡ Vypočítať trasu</button>
+</div>
+
+<div class="mapw">
+  <div id="map"></div>
+  <div id="cards" class="sidecards"></div>
+  <div class="statsbar" id="statsbar" style="display:none">
+    <div id="statsRow" class="statsrow"></div>
+  </div>
+</div>
+</div>
+
+<script>
+const map=L.map('map',{zoomControl:false}).setView([49.5,16],7);
+L.control.zoom({position:'topleft'}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap, CartoDB',maxZoom:19}).addTo(map);
+const rg=L.layerGroup().addTo(map);
+let season='s',strategy='mintime',prefNet='';
+let routeWps=[],chargeWps=[];
+
+// ===== Domovská adresa (localStorage s fallbackom) =====
+const DEFAULT_HOME='Spišská Nová Ves, Jilemnického 21';
+let _homeFallback=DEFAULT_HOME;
+function getHome(){try{return localStorage.getItem('homeAddr')||_homeFallback;}catch(e){return _homeFallback;}}
+function saveHome(v){_homeFallback=v;try{localStorage.setItem('homeAddr',v);}catch(e){}refreshHomeLbl();}
+function refreshHomeLbl(){const el=document.getElementById('homeLbl');if(el)el.textContent='🏠 '+getHome();}
+function setHome(target){document.getElementById(target).value=getHome();}
+function editHome(){const cur=getHome();const v=prompt('Domovská adresa:',cur);if(v&&v.trim())saveHome(v.trim());}
+refreshHomeLbl();
+
+// ===== GPS =====
+function useGps(target){
+  if(!navigator.geolocation){alert('GPS nie je dostupné');return;}
+  const inp=document.getElementById(target);
+  inp.value='Hľadám polohu…';
+  navigator.geolocation.getCurrentPosition(async p=>{
+    try{
+      const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${p.coords.latitude}&lon=${p.coords.longitude}&format=json&accept-language=sk`);
+      const d=await r.json();
+      const a=d.address||{};
+      const addr=[a.road,a.house_number,a.city||a.town||a.village].filter(Boolean).join(' ')||d.display_name;
+      inp.value=addr;
+    }catch(e){inp.value=`${p.coords.latitude.toFixed(5)},${p.coords.longitude.toFixed(5)}`;}
+  },e=>{inp.value='';alert('Nepodarilo sa získať polohu: '+e.message);});
+}
+
+function swapEnds(){
+  const o=document.getElementById('origin'),d=document.getElementById('dest');
+  [o.value,d.value]=[d.value,o.value];
+}
+
+// ===== Siete (var aby boli accessible aj pri setPrefNet skor) =====
+var NETS=[
+  {op:'Ionity',color:'#ff5a2a',price:0.79},{op:'ČEZ',color:'#1b60ff',price:0.65},
+  {op:'ZSE',color:'#1db866',price:0.59},{op:'GreenWay',color:'#5dc43f',price:0.52},
+  {op:'Tesla',color:'#e02020',price:0.55},{op:'MOL',color:'#dd8800',price:0.58},
+  {op:'Lidl',color:'#1044bb',price:0.39},{op:'Shell',color:'#c8a800',price:0.72},
+  {op:'E.ON',color:'#cc3300',price:0.62},{op:'futurego',color:'#4488ff',price:0.65},
+  {op:'default',color:'#555',price:0.65}
+];
+var NET_DEFAULT_KW={
+  ionity:350,'tesla supercharger':250,tesla:250,
+  cez:150,'čez':150,zse:150,greenway:150,'e.on':150,eon:150,mol:150,
+  lidl:120,shell:180,futurego:150,kaufland:160,allego:175,fastned:300
+};
+function renderNets(){
+  document.getElementById('nets').innerHTML=NETS.map((n,i)=>`
+    <div class="netrow${prefNet&&n.op===prefNet?' preferred':''}">
+      <div class="dot" style="background:${n.color}"></div>
+      <span class="nm">${n.op}</span>
+      <input type="number" value="${n.price}" min="0.05" max="5" step="0.01" onchange="NETS[${i}].price=+this.value||NETS[${i}].price"/>
+      <span class="eu">€/kWh</span>
+    </div>`).join('');
+}renderNets();
+function priceFor(op){if(!op)return NETS[NETS.length-1].price;const s=op.toLowerCase();const f=NETS.find(n=>s.includes(n.op.toLowerCase()));return f?f.price:NETS[NETS.length-1].price;}
+function colorFor(op){if(!op)return'#555';const s=op.toLowerCase();const f=NETS.find(n=>s.includes(n.op.toLowerCase()));return f?f.color:'#555';}
+function isPrefNet(op,name){
+  if(!prefNet)return false;
+  const pn=prefNet.toLowerCase();
+  return (op||'').toLowerCase().includes(pn)||(name||'').toLowerCase().includes(pn);
+}
+function setPrefNet(v){
+  prefNet=v;renderNets();
+  document.getElementById('prefInfo').textContent=v
+    ?'✓ Aplikácia bude prioritne plánovať nabíjanie na sieti '+v+' (max odchýlka 25 km od ideálnej zastávky).'
+    :'';
+}
+
+function paintSoc(){const v=+document.getElementById('socStart').value;document.getElementById('socLbl').textContent=v+'%';const f=document.getElementById('socFill');f.style.width=v+'%';f.style.background=v<20?'var(--bad)':v<35?'var(--warn)':'var(--accent)';}paintSoc();
+function checkSocWarn(){const v=+document.getElementById('socTgt').value;document.getElementById('socWarn').classList.toggle('show',v>80);}
+function setSeason(s){season=s;document.getElementById('sbS').classList.toggle('on',s==='s');document.getElementById('sbW').classList.toggle('on',s==='w');}
+const STRAT_INFO={mintime:'Nabíja len koľko treba na ďalší úsek (max 80%). Najrýchlejšia voľba – vyhýba sa pomalému dobíjaniu 80→100%.',standard:'Nabíja vždy na nastavené Max. %. Menej zastávok, ale dlhšie nabíjanie.'};
+function setStrat(s){strategy=s;document.getElementById('sb_mt').classList.toggle('on',s==='mintime');document.getElementById('sb_std').classList.toggle('on',s==='standard');document.getElementById('stratInfo').textContent=STRAT_INFO[s];}setStrat('mintime');
+
+function addWp(type){if(type==='route')routeWps.push({id:'rw_'+Date.now(),val:''});else chargeWps.push({id:'cw_'+Date.now(),val:''});drawWps();}
+function removeWp(type,id){if(type==='route')routeWps=routeWps.filter(x=>x.id!==id);else chargeWps=chargeWps.filter(x=>x.id!==id);drawWps();}
+function drawWps(){
+  document.getElementById('wps').innerHTML=routeWps.map(w=>`<div class="wprow"><input id="${w.id}" type="text" placeholder="mesto, ulica" value="${w.val}"/><button class="ghost danger" onclick="removeWp('route','${w.id}')">✕</button></div>`).join('');
+  document.getElementById('cwps').innerHTML=chargeWps.map(w=>`<div class="cw-item"><input id="${w.id}" type="text" placeholder="mesto, adresa, nabíjačka" value="${w.val}"/><button class="ghost danger" onclick="removeWp('charge','${w.id}')">✕</button></div>`).join('');
+}
+function getRouteWps(){return routeWps.map(w=>document.getElementById(w.id)?.value?.trim()).filter(Boolean);}
+function getChargeWps(){return chargeWps.map(w=>document.getElementById(w.id)?.value?.trim()).filter(Boolean);}
+function loadXlsx(inp){const f=inp.files[0];if(f)document.getElementById('xlsxLbl').textContent='✅ '+f.name;}
+
+// ===== KRIVKA NABÍJANIA (kalibrovaná: 10→80%≈16min, 80→100%≈24min) =====
+const CC=[
+  [0,50],[5,235],[10,235],[15,235],[20,235],[25,238],[30,250],[35,255],[40,255],
+  [45,257],[50,257],[55,240],[58,225],[60,205],[63,185],[65,175],[68,155],[70,140],
+  [73,130],[75,122],[77,110],[80,100],[82,92],[84,82],[86,72],[88,62],[90,52],
+  [92,42],[94,34],[96,26],[98,20],[100,15]
+];
+const BATT_KWH=77.4; // usable
+function chgKw(s){s=Math.max(0,Math.min(100,s));if(s<=CC[0][0])return CC[0][1];for(let i=1;i<CC.length;i++){if(s<=CC[i][0]){const[x0,y0]=CC[i-1],[x1,y1]=CC[i];return y0+(s-x0)*(y1-y0)/(x1-x0);}}return CC[CC.length-1][1];}
+function chgMin(a,b){if(b<=a)return 0;let t=0,s=+a;const STEP=0.1;while(s<b){const mid=Math.min(s+STEP/2,b);const kwhStep=(STEP/100)*BATT_KWH;t+=kwhStep/Math.max(1,chgKw(mid))*60;s+=STEP;}return Math.round(t);}
+
+// ===== Spotreba =====
+const CV=[[20,8.5],[30,9.3],[40,10.2],[50,11.4],[55,12.0],[60,12.6],[70,13.5],[80,14.6],[90,15.8],[100,16.8],[110,17.0],[120,20.2],[130,22.8],[135,24.2],[140,26.0],[150,30.0],[160,34.5]];
+function iArr(arr,x){for(let i=1;i<arr.length;i++){if(x<=arr[i][0]){const[x0,y0]=arr[i-1],[x1,y1]=arr[i];return y0+(x-x0)*(y1-y0)/(x1-x0);}}return arr[arr.length-1][1];}
+function cons(kmh,type){const b=iArr(CV,Math.max(20,Math.min(160,kmh)));return type==='hw'?b:type==='rd'?b*1.12:b*1.25;}
+
+// ===== Geokódovanie / routing =====
+async function geocode(q){
+  const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&accept-language=sk`);
+  const d=await r.json();if(!d.length)throw new Error('Nenájdené: '+q);
+  return[+d[0].lat,+d[0].lon,d[0].display_name.split(',').slice(0,2).join(', ')];
+}
+async function getRoute(pts){
+  const c=pts.map(p=>`${p[1]},${p[0]}`).join(';');
+  const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${c}?overview=full&geometries=geojson&steps=true`);
+  const d=await r.json();if(d.code!=='Ok')throw new Error('Trasa nenájdená');
+  return d.routes[0];
+}
+function roadMix(route){
+  let hw=0,rd=0,ct=0;
+  for(const leg of route.legs)for(const s of leg.steps){
+    const d=s.distance||0;if(d<20)continue;
+    const ref=(s.ref||'').toUpperCase();
+    const spd=d/Math.max(s.duration||1,1)*3.6;
+    if(/^[ADRE]\d/.test(ref)||/motorway|autobahn/i.test(s.name||''))hw+=d;
+    else if(spd>=60)rd+=d;else ct+=d;
+  }
+  const t=hw+rd+ct||1;
+  return{hwP:hw/t,rdP:rd/t,ctP:ct/t,hwKm:Math.round(hw/1000),rdKm:Math.round(rd/1000),ctKm:Math.round(ct/1000)};
+}
+
+// ===== Overpass s fallback mirror =====
+const OVERPASS_MIRRORS=[
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter'
+];
+async function overpassFetch(q){
+  for(const url of OVERPASS_MIRRORS){
+    try{
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q)});
+      if(!r.ok)continue;
+      const d=await r.json();
+      if(d&&Array.isArray(d.elements))return d;
+    }catch(e){console.warn('Overpass mirror failed',url,e);}
+  }
+  return{elements:[]};
+}
+
+function parsePower(val){
+  if(!val)return 0;
+  const m=String(val).match(/(\d+(?:\.\d+)?)\s*(kw|kva|w)?/i);
+  if(!m)return 0;
+  let v=parseFloat(m[1]);
+  const unit=(m[2]||'kw').toLowerCase();
+  if(unit==='w')v=v/1000;
+  return v;
+}
+function parseCharger(el){
+  const t=el.tags||{};
+  const name=t.name||t.brand||t.operator||'Nabíjacia stanica';
+  const op=t.operator||t.brand||t.network||t.name||'';
+  const addr=[t['addr:street'],t['addr:housenumber'],t['addr:city'],t['addr:postcode']].filter(Boolean).join(' ').trim()||t['addr:full']||'';
+  let maxKw=0,isEstimated=false;
+  const powerTags=['charging_station:output','maxpower','max_power','power','power:output','socket:type2_combo:output','socket:ccs:output','socket:chademo:output','socket:tesla_supercharger:output','socket:type2:output','socket:tesla_destination:output'];
+  for(const k of powerTags){const v=parsePower(t[k]);if(v>maxKw)maxKw=v;}
+  const hasDC=!!(t['socket:type2_combo']||t['socket:ccs']||t['socket:chademo']||t['socket:tesla_supercharger']||/ccs|chademo|combo|supercharger/i.test(JSON.stringify(t)));
+  const onlyAC=!hasDC&&(t['socket:type2']||t['socket:schuko']||t['socket:type1']);
+  if(maxKw===0){
+    const opLow=op.toLowerCase();
+    for(const key in NET_DEFAULT_KW){
+      if(opLow.includes(key)){maxKw=NET_DEFAULT_KW[key];isEstimated=true;break;}
+    }
+    if(maxKw===0&&hasDC){maxKw=50;isEstimated=true;}
+  }
+  return{id:el.id,name,op,addr,lat:el.lat,lon:el.lon,maxKw:Math.round(maxKw),isEstimated,hasDC,onlyAC};
+}
+
+// Nájde DC nabíjačky v bode (pre detail po naplánovaní)
+async function fetchChargers(lat,lon,radius=8000){
+  const q=`[out:json][timeout:15];node["amenity"="charging_station"](around:${radius},${lat},${lon});out body 50;`;
+  const d=await overpassFetch(q);
+  let items=d.elements.map(parseCharger).filter(c=>!c.onlyAC&&c.maxKw>=40).sort((a,b)=>b.maxKw-a.maxKw);
+  if(prefNet){
+    items.sort((a,b)=>{
+      const ap=isPrefNet(a.op,a.name)?1:0,bp=isPrefNet(b.op,b.name)?1:0;
+      return bp-ap||b.maxKw-a.maxKw;
+    });
+  }
+  return items.slice(0,5);
+}
+
+// Prednačíta všetky preferované nabíjačky pozdĺž trasy NARAZ
+// Používa BBox z celej trasy + filter operator/brand ~ "<sieť>" (riegujú case-insensitive)
+async function preloadPreferredAlongRoute(coords){
+  if(!prefNet)return[];
+  let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+  for(const c of coords){
+    if(c[1]<minLat)minLat=c[1];if(c[1]>maxLat)maxLat=c[1];
+    if(c[0]<minLon)minLon=c[0];if(c[0]>maxLon)maxLon=c[0];
+  }
+  // bbox + 0.3° (~30 km buffer)
+  minLat-=0.3;maxLat+=0.3;minLon-=0.3;maxLon+=0.3;
+  // Escape special regex chars v názve siete (napr. "E.ON" → "E\\.ON", "ČEZ" → "[ČC]EZ")
+  const pn=prefNet.replace(/\./g,'\\.').replace(/Č/g,'[ČC]');
+  const bbox=`${minLat},${minLon},${maxLat},${maxLon}`;
+  const q=`[out:json][timeout:25];(node["amenity"="charging_station"]["operator"~"${pn}",i](${bbox});node["amenity"="charging_station"]["brand"~"${pn}",i](${bbox});node["amenity"="charging_station"]["network"~"${pn}",i](${bbox}););out body 300;`;
+  const d=await overpassFetch(q);
+  const seen=new Set();const items=[];
+  for(const el of d.elements){
+    if(seen.has(el.id))continue;seen.add(el.id);
+    const c=parseCharger(el);
+    if(!c.onlyAC&&c.maxKw>=40&&isPrefNet(c.op,c.name))items.push(c);
+  }
+  // Filter na vzdialenosť od trasy (max 30 km) – lokálne
+  const filtered=items.filter(c=>{
+    const r=kmOnRouteFor(coords,[c.lat,c.lon]);
+    c._onRouteKm=r.km;c._deviation=r.dist;
+    return r.dist<=30;
+  });
+  console.log(`Preloaded ${filtered.length}/${items.length} ${prefNet} chargers along route`);
+  return filtered;
+}
+let PREF_CACHE=[];
+// Nájde preferovanú stanicu v intervale [minKm, maxKm] na trase
+// preferuje stanice bližšie k idealKm s malým odklonom od trasy
+function findPreferredInRange(coords,idealKm,minKm,maxKm,maxDeviationKm=20){
+  if(!PREF_CACHE.length)return null;
+  let best=null,bestScore=Infinity;
+  for(const c of PREF_CACHE){
+    const k=c._onRouteKm,dev=c._deviation;
+    if(k<minKm||k>maxKm)continue;
+    if(dev>maxDeviationKm)continue;
+    // skore: odchýlka od ideálneho km + 2*odklon od trasy
+    const score=Math.abs(k-idealKm)+dev*2;
+    if(score<bestScore){bestScore=score;best={...c,onRouteKm:k,deviation:dev};}
+  }
+  return best;
+}
+
+// Pomocná: km na trase pre daný bod
+function kmOnRouteFor(coords,latlon){
+  let best=Infinity,bestKm=0,acc=0;
+  for(let i=1;i<coords.length;i++){
+    const seg=L.latLng(coords[i-1][1],coords[i-1][0]).distanceTo(L.latLng(coords[i][1],coords[i][0]))/1000;
+    const mLat=(coords[i-1][1]+coords[i][1])/2,mLon=(coords[i-1][0]+coords[i][0])/2;
+    const d=L.latLng(latlon[0],latlon[1]).distanceTo(L.latLng(mLat,mLon))/1000;
+    if(d<best){best=d;bestKm=acc+seg/2;}
+    acc+=seg;
+  }
+  return{km:bestKm,dist:best};
+}
+
+/* OPRAVENÝ planRoute – v mintime cap 80%, snaha o preferovanú sieť */
+async function planRoute(totalKm,avgCons,cwKms,coords){
+  const USABLE=BATT_KWH,RESERVE=10;
+  const socStart=+document.getElementById('socStart').value;
+  const socDest=+document.getElementById('socDest').value;
+  const socMin=+document.getElementById('socMin').value;
+  const socTgtRaw=+document.getElementById('socTgt').value;
+  const socTgt=Math.min(socTgtRaw,strategy==='mintime'?80:100);
+  const cpkm=avgCons/100;
+  let soc=socStart,pos=0;const stops=[];let guard=0;const usedCw=new Set();
+
+  while(pos<totalKm&&guard<30){
+    guard++;
+    const rem=totalKm-pos;
+    const socEnd=soc-(rem*cpkm/USABLE)*100;
+    if(socEnd>=socDest){soc=socEnd;break;}
+
+    const usableKwh=Math.max(0,(soc-socMin)/100*USABLE);
+    const maxRange=usableKwh/cpkm;
+    const autoStop=Math.min(pos+maxRange*0.85,totalKm-0.5);
+
+    // 1) vlastná pridaná zastávka má najvyššiu prioritu
+    const nxtCw=cwKms.filter(k=>k>pos+0.5&&!usedCw.has(k)).sort((a,b)=>a-b)[0];
+    let stopKm,forced=false,prefCharger=null;
+    if(nxtCw!=null&&nxtCw<=autoStop+10){
+      stopKm=nxtCw;forced=true;usedCw.add(nxtCw);
+    }else if(prefNet&&PREF_CACHE.length){
+      // 2) Pref. sieť: prijmi stanicu v rozsahu [pos+min_dojazd, autoStop+10]
+      // min_dojazd = 30% maxRange (aby sme nezastavovali príliš skôro), max = ideál +10 km
+      const minStop=pos+Math.max(40,maxRange*0.3);
+      const maxStop=Math.min(totalKm-1,autoStop+10);
+      const charger=findPreferredInRange(coords,autoStop,minStop,maxStop,20);
+      if(charger){
+        stopKm=charger.onRouteKm;prefCharger=charger;
+      }else stopKm=autoStop;
+    }else stopKm=autoStop;
+    if(stopKm<=pos+0.5)break;
+
+    const socArr=Math.max(soc-((stopKm-pos)*cpkm/USABLE)*100,socMin*0.8);
+    const remAfter=totalKm-stopKm;
+    const neededToDest=(remAfter*cpkm/USABLE)*100+socDest;
+
+    let chargeTo;
+    if(strategy==='mintime'){
+      const targetCap=Math.min(80,socTgt);
+      if(neededToDest+RESERVE<=targetCap){
+        chargeTo=neededToDest+RESERVE;
+      }else{
+        chargeTo=Math.min(95,Math.max(targetCap,neededToDest+3));
+      }
+    }else{
+      chargeTo=socTgt;
+      if(neededToDest+3>chargeTo)chargeTo=Math.min(95,neededToDest+3);
+    }
+    chargeTo=Math.min(chargeTo,100);
+    chargeTo=Math.max(chargeTo,socArr+5);
+
+    const kwh=Math.round((chargeTo-socArr)/100*USABLE*10)/10;
+    const mins=chgMin(socArr,chargeTo);
+    const peakKw=chgKw(socArr+2);
+    stops.push({km:Math.round(stopKm),socArr:Math.round(socArr),socOut:Math.round(chargeTo),kwh,min:mins,forced,peakKw,prefCharger});
+    soc=chargeTo;pos=stopKm;
+  }
+  return{stops,finalSoc:Math.round(Math.max(soc,0))};
+}
+
+function ptAt(coords,km){let acc=0;for(let i=1;i<coords.length;i++){const seg=L.latLng(coords[i-1][1],coords[i-1][0]).distanceTo(L.latLng(coords[i][1],coords[i][0]))/1000;if(acc+seg>=km){const t=(km-acc)/seg,p=coords[i-1],q=coords[i];return[p[1]+(q[1]-p[1])*t,p[0]+(q[0]-p[0])*t];}acc+=seg;}const l=coords[coords.length-1];return[l[1],l[0]];}
+function dotIcon(color,sz=14){return L.divIcon({html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,0.5)"></div>`,className:'',iconSize:[sz,sz]});}
+function lblIcon(html){return L.divIcon({html:`<div style="white-space:nowrap">${html}</div>`,className:'',iconSize:[null,null]});}
+const setLdr=(v,t='')=>{const e=document.getElementById('ldr');e.classList.toggle('show',v);if(t)e.textContent=t;};
+const showErr=m=>{const e=document.getElementById('err');e.textContent='⚠ '+m;e.classList.add('show');};
+const clearErr=()=>document.getElementById('err').classList.remove('show');
+const gMapIcon = `<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+
+async function run(){
+  clearErr();setLdr(true,'Hľadám lokácie…');document.getElementById('runBtn').disabled=true;
+  rg.clearLayers();document.getElementById('cards').innerHTML='';document.getElementById('statsbar').style.display='none';
+  try{
+    const names=[document.getElementById('origin').value.trim(),...getRouteWps(),document.getElementById('dest').value.trim()].filter(Boolean);
+    if(names.length<2)throw new Error('Zadaj štart aj cieľ.');
+    const cwNames=getChargeWps();
+    const allGeo=await Promise.all([...names,...cwNames].map(geocode));
+    const pts=allGeo.slice(0,names.length);const cwPts=allGeo.slice(names.length);
+
+    setLdr(true,'Načítavam trasu…');
+    const route=await getRoute(pts);const totalKm=route.distance/1000;const driveMin=Math.round(route.duration/60);const coords=route.geometry.coordinates;const mix=roadMix(route);
+    let avgCons=cons(+document.getElementById('spdHw').value,'hw')*mix.hwP+cons(+document.getElementById('spdRd').value,'rd')*mix.rdP+cons(+document.getElementById('spdCt').value,'ct')*mix.ctP;
+    if(season==='w')avgCons*=1.15;
+
+    const cwKms=cwPts.map(cw=>kmOnRouteFor(coords,[cw[0],cw[1]]).km);
+    document.getElementById('mixDisp').style.display='block';
+    document.getElementById('mixBar').innerHTML=`<div class="mixseg" style="width:${mix.hwP*100}%;background:#1456bb">${mix.hwP>0.08?Math.round(mix.hwP*100)+'%':''}</div><div class="mixseg" style="width:${mix.rdP*100}%;background:#1e7a3a">${mix.rdP>0.08?Math.round(mix.rdP*100)+'%':''}</div><div class="mixseg" style="width:${mix.ctP*100}%;background:#7a5010">${mix.ctP>0.08?Math.round(mix.ctP*100)+'%':''}</div>`;
+    document.getElementById('mixTxt').innerHTML=`🛣 ${mix.hwKm}km diaľnica · 🛤 ${mix.rdKm}km cesta · 🏘 ${mix.ctKm}km obec`;
+
+    if(prefNet){
+      setLdr(true,`Načítavam ${prefNet} nabíjačky pozdĺž trasy…`);
+      try{PREF_CACHE=await preloadPreferredAlongRoute(coords);}
+      catch(e){PREF_CACHE=[];console.warn('Preload failed',e);}
+    }else{PREF_CACHE=[];}
+    setLdr(true,prefNet?`Plánujem trasu (${PREF_CACHE.length} ${prefNet} staníc na trase)…`:'Plánujem trasu…');
+    const{stops,finalSoc}=await planRoute(totalKm,avgCons,cwKms,coords);
+    const line=L.geoJSON(route.geometry,{style:{color:'#1a73e8',weight:6,opacity:0.9,lineCap:'round'}}).addTo(rg);
+    map.fitBounds(line.getBounds(),{padding:[40,40]});
+
+    const fcol=finalSoc<10?'var(--bad)':finalSoc<20?'var(--warn)':'var(--accent)';
+    L.marker([pts[0][0],pts[0][1]],{icon:dotIcon('#00d4ff',16)}).bindPopup(`<b>Štart</b><br>${pts[0][2]}<br>SoC: ${document.getElementById('socStart').value}%`).addTo(rg);
+    L.marker([pts[pts.length-1][0],pts[pts.length-1][1]],{icon:dotIcon('#ff5d5d',16)}).bindPopup(`<b>Cieľ</b><br>${pts[pts.length-1][2]}<br>SoC: <b style="color:${fcol}">${finalSoc}%</b>`).addTo(rg);
+
+    let totMin=0,totKwh=0,totCost=0;const cards=[];
+    for(let i=0;i<stops.length;i++){
+      const s=stops[i];const pt=ptAt(coords,s.km);
+      setLdr(true,`Hľadám DC nabíjačky · zastávka ${i+1}/${stops.length}…`);
+      const chargers=await fetchChargers(pt[0],pt[1]);
+      // Ak plánovač vybral preferovanú stanicu, posuň ju na 1. miesto
+      if(s.prefCharger){
+        const exists=chargers.find(c=>c.id===s.prefCharger.id);
+        if(!exists)chargers.unshift(s.prefCharger);
+        else{chargers.splice(chargers.indexOf(exists),1);chargers.unshift(exists);}
+      }
+      const bestC=chargers[0];const op=bestC?.op||'';const price=priceFor(op);const color=colorFor(op);
+      const cost=Math.round(s.kwh*price*100)/100;
+      totMin+=s.min;totKwh+=s.kwh;totCost+=cost;
+
+      const stopHtml=`<div style="background:${color};color:#fff;padding:6px 12px;border-radius:999px;font-size:14px;font-weight:700;border:2px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,0.5)">${s.prefCharger?'⭐ ':''}⚡${s.peakKw|0}kW · ${s.km}km</div>`;
+      L.marker([pt[0],pt[1]],{icon:lblIcon(stopHtml)}).bindPopup(`<b>Zastávka ${i+1}</b>${s.forced?' ★':''}${s.prefCharger?' ⭐ '+s.prefCharger.op:''}<br>${s.socArr}%→${s.socOut}%<br>+${s.kwh} kWh · <b>${s.min} min</b><br>~${cost.toFixed(2)} €`).addTo(rg);
+
+      let chgHtml='';
+      for(const c of chargers){
+        const gmUrl=`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lon}`;
+        const ccolor=colorFor(c.op);
+        const isPref=isPrefNet(c.op,c.name);
+        const estLbl=c.isEstimated?'<span class="chest">odhad</span>':'';
+        L.marker([c.lat,c.lon],{icon:lblIcon(`<div class="chpin${isPref?' pref':''}">${isPref?'⭐':''}⚡${c.maxKw}kW</div>`)}).bindPopup(`<b>${c.name}</b>${isPref?' ⭐':''}<br>${c.addr?'📍 '+c.addr+'<br>':''}<b>${c.maxKw} kW</b>${c.isEstimated?' (odhad)':''}${c.op?' · '+c.op:''}<br><br><a href="${gmUrl}" target="_blank" class="gm-btn">${gMapIcon} Navigovať</a>`).addTo(rg);
+        chgHtml+=`<div class="chblock${isPref?' pref':''}">
+          <div class="chn"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ccolor};margin-right:8px;box-shadow:0 0 6px ${ccolor}"></span>${c.name}${isPref?` <span class="net-pref-badge">⭐ ${prefNet}</span>`:''}</div>
+          ${c.addr?`<div class="cha">📍 ${c.addr}</div>`:''}
+          <div class="chf">
+            <span class="chkw">⚡ ${c.maxKw} kW DC${estLbl}</span>
+            ${c.op?`<span style="font-size:13px;color:#94a3b8;font-weight:500">${c.op}</span>`:''}
+            <a href="${gmUrl}" target="_blank" class="gm-btn">${gMapIcon} Google Maps</a>
+          </div>
+        </div>`;
+      }
+      if(!chgHtml)chgHtml=`<div class="small" style="margin-top:10px;padding:10px;background:#3a1212;border-radius:8px;color:#ffaaaa">⚠ Žiadne DC nabíjačky (≥40 kW) v okolí 8 km nenájdené v OSM. Skontroluj v aplikácii Plugshare/ABRP.</div>`;
+
+      const stag=s.socArr<10?'tagbad':s.socArr<20?'tagwarn':'tagok';
+      cards.push(`<div class="card">
+        <h4><span style="color:${color}">⚡ Zastávka ${i+1}</span>${s.forced?'<span class="tag" style="background:#cc99ff22">★ vlastná</span>':''}${s.prefCharger?'<span class="tag" style="background:#ff880022;color:#ffaa55">⭐ '+prefNet+'</span>':''}<span class="tag ${stag}">${s.socArr}% príchod</span><span class="tag" style="background:#ffffff11">${s.km} km</span></h4>
+        <div style="font-size:14px;color:var(--muted);line-height:1.6;margin-top:8px">Odchod <b style="color:#e8edf5">${s.socOut}%</b> · +<b style="color:#e8edf5">${s.kwh} kWh</b> · <b style="color:#00d4ff">${s.min} min</b><br>Cena: <b style="color:#e8edf5">${cost.toFixed(2)} €</b> <span style="font-size:12px">(${price} €/kWh)</span></div>
+        ${chgHtml}
+      </div>`);
+    }
+    if(!stops.length)cards.push(`<div class="card"><h4 style="color:#6de09a">✅ Bez nabíjania</h4><div style="font-size:14px;color:var(--muted)">Na tejto trase nie je potrebné zastavovať.</div></div>`);
+    document.getElementById('cards').innerHTML=cards.join('');
+
+    const tt=driveMin+totMin;
+    document.getElementById('statsRow').innerHTML=`<div class="sbox"><div class="v">${Math.round(totalKm)} km</div><div class="l">Vzdialenosť</div></div><div class="sbox"><div class="v">${Math.floor(driveMin/60)}h ${driveMin%60}m</div><div class="l">Čas jazdy</div></div><div class="sbox"><div class="v">${stops.length}×</div><div class="l">Zastávky</div></div><div class="sbox"><div class="v">${totMin} min</div><div class="l">Nabíjanie</div></div><div class="sbox"><div class="v">${Math.floor(tt/60)}h ${tt%60}m</div><div class="l">Celkový čas</div></div><div class="sbox"><div class="v" style="color:${fcol}">${finalSoc}%</div><div class="l">SoC v cieli</div></div><div class="sbox"><div class="v">${avgCons.toFixed(1)}</div><div class="l">kWh/100km</div></div><div class="sbox"><div class="v">${totKwh.toFixed(1)} kWh</div><div class="l">Energia</div></div><div class="sbox"><div class="v">${totCost.toFixed(2)} €</div><div class="l">Cena</div></div>`;
+    document.getElementById('statsbar').style.display='block';
+  }catch(e){showErr(e.message||'Neznáma chyba');}
+  finally{setLdr(false);document.getElementById('runBtn').disabled=false;}
+}
+</script>
+</body>
+</html>
